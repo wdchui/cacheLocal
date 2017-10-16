@@ -4,24 +4,25 @@
  * https://github.com/wdchui/cacheLocal
  */
 (function(){
-    window.cacheJsLocal = {
+    window.cacheLocal = {
+        keyPrefix:"cacheLocal_",
         resourceChain:[],
         checkSupport:function(){
             try{
                 return window.localStorage && window.JSON || false;
             }catch(e){
-                return false
+                return false;
             }
         },
         setItem:function(item){
             try{
-                localStorage.setItem(item.key, JSON.stringify(item))
+                localStorage.setItem(cacheLocal.keyPrefix + item.key, JSON.stringify(item));
             }catch(e){
                 return false;
             }
         },
         getItem:function(itemKey){
-            var item = localStorage.getItem(itemKey);
+            var item = localStorage.getItem(cacheLocal.keyPrefix + itemKey);
             try{
                 return JSON.parse(item || 'false');
             }catch(e){
@@ -29,7 +30,7 @@
             }
         },
         removeItem:function(itemKey){
-            localStorage.removeItem(itemKey);
+            localStorage.removeItem(cacheLocal.keyPrefix + itemKey);
         },
         getUrl:function(obj, callback){
             try{
@@ -41,43 +42,60 @@
                             value:xhr.responseText,
                             version:obj.version
                         }
-                        callback(item);
-                        cacheJsLocal.evalJs(xhr.responseText);
-                        var nextRes = cacheJsLocal.resourceChain.shift();
-                        nextRes && cacheJsLocal.loadRes(nextRes);
+                        typeof callback === 'function' && callback(item);
+                        if(obj.type == 'js'){
+                            cacheLocal.evalJs(xhr.responseText);
+                        }
+                        if(obj.type == 'css'){
+                            cacheLocal.evalCss(xhr.responseText);
+                        }
+                        var nextRes = cacheLocal.resourceChain.shift();
+                        nextRes && cacheLocal.loadRes(nextRes);
                     }
                 };
                 xhr.open( 'GET', obj.url+'?v='+obj.version, false);
                 xhr.send();
             }catch(e){
-
+                //to do sth
             }
         },
         isNew:function(itemKey, version){
-            var item = cacheJsLocal.getItem(itemKey);
+            var item = cacheLocal.getItem(itemKey);
             if(item){
-                return item.version == version
+                return item.version == version;
             }else{
                 return false;
             }
         },
         loadRes:function(obj){
-            if(cacheJsLocal.isNew(obj.key, obj.version)){
-                var item = cacheJsLocal.getItem(obj.key);
-                cacheJsLocal.evalJs(item.value);
-                var nextRes = cacheJsLocal.resourceChain.shift();
-                nextRes && cacheJsLocal.loadRes(nextRes);
+            if(cacheLocal.checkSupport()){
+                if(cacheLocal.isNew(obj.key, obj.version)){
+                    var item = cacheLocal.getItem(obj.key);
+                    if(obj.type == 'js'){
+                        cacheLocal.evalJs(item.value);
+                    }
+                    if(obj.type == 'css'){
+                        cacheLocal.evalCss(item.value);
+                    }
+                    var nextRes = cacheLocal.resourceChain.shift();
+                    nextRes && cacheLocal.loadRes(nextRes);
+                }else{
+                    cacheLocal.removeItem(obj.key);
+                    cacheLocal.getUrl(obj,cacheLocal.setItem);
+                }
             }else{
-                cacheJsLocal.removeItem(obj.key);
-                cacheJsLocal.getUrl(obj,cacheJsLocal.setItem);
+                cacheLocal.getUrl(obj);
             }
         },
         evalJs:function(text){
             var head = document.head || document.getElementsByTagName('head')[0];
             var script = document.createElement('script');
-            script.defer = true;
             script.text = text;
             head.appendChild(script);
+        },
+        evalCss:function(text){
+            cssNode = '<style>'+text+'</style>';
+            document.write(cssNode);
         }
     }
 })();
